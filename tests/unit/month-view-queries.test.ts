@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { summarizeMonth, type MonthRow } from "@/lib/server/month-view-queries";
+import {
+  summarizeMonth,
+  groupByCategory,
+  type MonthRow,
+} from "@/lib/server/month-view-queries";
 
 const row = (over: Partial<MonthRow>): MonthRow => ({
   id: over.id ?? "id",
@@ -39,5 +43,31 @@ describe("summarizeMonth", () => {
     expect(s.saldo).toBe(100);
     expect(s.paidCount).toBe(0);
     expect(s.totalCount).toBe(1);
+  });
+});
+
+describe("groupByCategory", () => {
+  it("sorts fixed bills by due day ascending, then by name", () => {
+    const rows: MonthRow[] = [
+      row({ id: "consorcio", nameSnapshot: "Consórcio", categorySnapshot: "fixed_bill", dueDaySnapshot: 15 }),
+      row({ id: "aluguel", nameSnapshot: "Aluguel", categorySnapshot: "fixed_bill", dueDaySnapshot: 5 }),
+      row({ id: "vivo", nameSnapshot: "Vivo", categorySnapshot: "fixed_bill", dueDaySnapshot: 10 }),
+      row({ id: "sanepar", nameSnapshot: "Sanepar", categorySnapshot: "fixed_bill", dueDaySnapshot: 5 }),
+    ];
+    const grouped = groupByCategory(rows);
+    expect(grouped.fixed.map((r) => r.id)).toEqual([
+      "aluguel",
+      "sanepar",
+      "vivo",
+      "consorcio",
+    ]);
+  });
+
+  it("places fixed rows with null due day at the end", () => {
+    const rows: MonthRow[] = [
+      row({ id: "noday", nameSnapshot: "Sem dia", categorySnapshot: "fixed_bill", dueDaySnapshot: null }),
+      row({ id: "early", nameSnapshot: "Early", categorySnapshot: "fixed_bill", dueDaySnapshot: 3 }),
+    ];
+    expect(groupByCategory(rows).fixed.map((r) => r.id)).toEqual(["early", "noday"]);
   });
 });

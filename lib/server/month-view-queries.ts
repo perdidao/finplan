@@ -64,7 +64,14 @@ export function groupByCategory(rows: MonthRow[]): {
   income: MonthRow[];
 } {
   return {
-    fixed: rows.filter((r) => r.categorySnapshot === "fixed_bill"),
+    fixed: rows
+      .filter((r) => r.categorySnapshot === "fixed_bill")
+      .sort((a, b) => {
+        const aDue = a.dueDaySnapshot ?? 99;
+        const bDue = b.dueDaySnapshot ?? 99;
+        if (aDue !== bDue) return aDue - bDue;
+        return a.nameSnapshot.localeCompare(b.nameSnapshot, "pt-BR");
+      }),
     variable: rows.filter((r) => r.categorySnapshot === "variable_bill"),
     income: rows.filter((r) => r.categorySnapshot === "income"),
   };
