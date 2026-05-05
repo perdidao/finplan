@@ -1,7 +1,8 @@
 import { db } from "@/lib/db/client";
 import { monthlyEntries } from "@/lib/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type { Category } from "@/lib/server/recurring-queries";
+import { addMonths } from "@/lib/time/month";
 
 export interface MonthRow {
   id: string;
@@ -56,6 +57,50 @@ export function summarizeMonth(rows: MonthRow[]): MonthSummary {
     }
   }
   return { despesas, receitas, saldo: receitas - despesas, paidCount, totalCount };
+}
+
+export interface MonthHistoryEntry {
+  month: string;
+  despesas: number;
+  receitas: number;
+  saldo: number;
+  paidCount: number;
+  totalCount: number;
+}
+
+export async function fetchRecentSummaries(
+  currentMonth: string,
+  count: number,
+): Promise<MonthHistoryEntry[]> {
+  const months: string[] = [];
+  for (let i = count - 1; i >= 0; i--) months.push(addMonths(currentMonth, -i));
+
+  const rows = await db
+    .select()
+    .from(monthlyEntries)
+    .where(inArray(monthlyEntries.month, months));
+
+  const byMonth = new Map<string, MonthRow[]>();
+  for (const m of months) byMonth.set(m, []);
+  for (const r of rows) {
+    const list = byMonth.get(r.month);
+    if (!list) continue;
+    list.push({
+      id: r.id,
+      recurringEntryId: r.recurringEntryId,
+      month: r.month,
+      nameSnapshot: r.nameSnapshot,
+      categorySnapshot: r.categorySnapshot,
+      dueDaySnapshot: r.dueDaySnapshot,
+      amount: r.amount,
+      paid: r.paid,
+    });
+  }
+
+  return months.map((m) => {
+    const s = summarizeMonth(byMonth.get(m) ?? []);
+    return { month: m, ...s };
+  });
 }
 
 export function groupByCategory(rows: MonthRow[]): {
