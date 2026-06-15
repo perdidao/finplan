@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
 import { monthlyEntries } from "@/lib/db/schema";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { Category } from "@/lib/server/recurring-queries";
 import { addMonths } from "@/lib/time/month";
 
@@ -101,6 +101,40 @@ export async function fetchRecentSummaries(
     const s = summarizeMonth(byMonth.get(m) ?? []);
     return { month: m, ...s };
   });
+}
+
+/**
+ * A month is "closed" once it has at least one payable (non-income) entry and
+ * every one of them is paid. Closure is derived, not stored — un-paying a bill
+ * reopens the month automatically.
+ */
+export function isMonthClosed(summary: MonthSummary): boolean {
+  return summary.totalCount > 0 && summary.paidCount === summary.totalCount;
+}
+
+/**
+ * Picks the month to open on launch: the earliest month with data that isn't
+ * closed (so closed months are skipped forward to the next open one). If every
+ * month with data is closed, returns the latest. Returns null when there's no
+ * data at all.
+ */
+export async function resolveLandingMonth(): Promise<string | null> {
+  const rows = await db
+    .select({
+      month: monthlyEntries.month,
+      total: sql<number>`count(*) filter (where ${monthlyEntries.categorySnapshot} <> 'income')::int`,
+      paid: sql<number>`count(*) filter (where ${monthlyEntries.categorySnapshot} <> 'income' and ${monthlyEntries.paid})::int`,
+    })
+    .from(monthlyEntries)
+    .groupBy(monthlyEntries.month)
+    .orderBy(asc(monthlyEntries.month));
+
+  if (rows.length === 0) return null;
+  for (const r of rows) {
+    const closed = r.total > 0 && r.total === r.paid;
+    if (!closed) return r.month;
+  }
+  return rows[rows.length - 1].month;
 }
 
 export function groupByCategory(rows: MonthRow[]): {

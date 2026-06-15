@@ -3,6 +3,7 @@ import {
   fetchMonthRows,
   fetchRecentSummaries,
   groupByCategory,
+  isMonthClosed,
   summarizeMonth,
 } from "@/lib/server/month-view-queries";
 import { listAllTemplates } from "@/lib/server/recurring-queries";
@@ -65,6 +66,10 @@ export default async function MonthPage({
   const isFirstRun = templates.length === 0 && rows.length === 0;
   const grouped = groupByCategory(rows);
   const summary = summarizeMonth(rows);
+  // Editable closure: all bills paid marks the month as "fechado" without
+  // making it read-only (un-paying a bill reopens it). Frozen months remain
+  // read-only via the date/action freeze trigger.
+  const closed = frozen || isMonthClosed(summary);
 
   if (isFirstRun) {
     return (
@@ -92,7 +97,7 @@ export default async function MonthPage({
         hasNext={nextExists}
         isCurrentMonth={month === currentMonthInSP()}
         isFirstRun={!anyMaterialized}
-        isClosed={frozen}
+        isClosed={closed}
       />
       <div className="page">
         {frozen ? (

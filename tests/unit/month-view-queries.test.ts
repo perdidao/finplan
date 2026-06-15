@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   summarizeMonth,
   groupByCategory,
+  isMonthClosed,
   type MonthRow,
 } from "@/lib/server/month-view-queries";
 
@@ -43,6 +44,32 @@ describe("summarizeMonth", () => {
     expect(s.saldo).toBe(100);
     expect(s.paidCount).toBe(0);
     expect(s.totalCount).toBe(1);
+  });
+});
+
+describe("isMonthClosed", () => {
+  it("is closed when every payable bill is paid", () => {
+    const rows: MonthRow[] = [
+      row({ categorySnapshot: "fixed_bill", amount: "1000.00", paid: true }),
+      row({ categorySnapshot: "variable_bill", amount: "300.00", paid: true }),
+      row({ categorySnapshot: "income", amount: "2000.00", paid: false }),
+    ];
+    expect(isMonthClosed(summarizeMonth(rows))).toBe(true);
+  });
+
+  it("is open while any bill is unpaid (income is ignored)", () => {
+    const rows: MonthRow[] = [
+      row({ categorySnapshot: "fixed_bill", amount: "1000.00", paid: true }),
+      row({ categorySnapshot: "variable_bill", amount: "300.00", paid: false }),
+    ];
+    expect(isMonthClosed(summarizeMonth(rows))).toBe(false);
+  });
+
+  it("is not closed when there are no payable bills", () => {
+    const rows: MonthRow[] = [
+      row({ categorySnapshot: "income", amount: "2000.00", paid: true }),
+    ];
+    expect(isMonthClosed(summarizeMonth(rows))).toBe(false);
   });
 });
 
